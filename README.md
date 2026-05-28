@@ -1,28 +1,28 @@
 # Auth0-style Identity Service
 
-This repository contains a self-hosted identity-management foundation for a financial application.
+Self-hosted identity-management foundation for a financial application.
 
-## Scope
+## Current scope
 
-The first implementation focuses on the core identity layer:
+This initial implementation contains:
 
-- user registration and email-verification state
+- user registration with email-verification state
 - password credential handling with Argon2id
-- login with access tokens and refresh-token rotation
-- TOTP-based MFA setup and challenge completion
+- login with short-lived JWT access tokens
+- refresh-token rotation with reuse detection
 - server-side session registry
-- refresh-token family reuse detection
+- TOTP MFA setup and MFA challenge completion
 - audit events for sensitive identity actions
-- a lightweight mock page for manual testing
+- lightweight browser mock page for manual testing
 
-## Important boundary
+## Boundary
 
 Identity answers **who the user is** and how strong the authentication was.
-Financial authorization, object-level account access, and bank-consent validation belong to separate modules.
+Financial authorization, object-level account access, and bank-consent validation should remain separate modules.
 
 ```text
-identity       -> user, credential, MFA, session, token lifecycle
-authorization  -> role, permission, object-level access
+identity       -> user, credentials, MFA, sessions, token lifecycle
+authorization  -> roles, permissions, object-level access
 consent        -> bank-account access grants and scopes
 audit          -> append-only security events
 risk           -> step-up and suspicious activity decisions
@@ -36,7 +36,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Then open:
+Open the mock test page:
 
 ```text
 http://localhost:4000/mock
@@ -44,4 +44,4 @@ http://localhost:4000/mock
 
 ## Security note
 
-This is an initial foundation, not a finished regulated-production identity provider. Before production use, add persistent storage, KMS-backed secrets, security reviews, penetration testing, full audit immutability, and compliance validation.
+Starter foundation only. Before regulated production use, add persistent storage, KMS-backed secrets, immutable audit storage, rate limiting, security review, penetration testing, and compliance validation.
