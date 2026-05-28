@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/", "destination": "/index.html" },
-    { "source": "/mock", "destination": "/mock.html" },
+    { "source": "/mock", "destination": "/index.html" },
     { "source": "/health", "destination": "/api/index" },
     { "source": "/me", "destination": "/api/index" },
     { "source": "/auth/:path*", "destination": "/api/index" },
