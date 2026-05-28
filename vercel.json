@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/mock", "destination": "/mock.html" },
+    { "source": "/health", "destination": "/api" },
+    { "source": "/me", "destination": "/api" },
+    { "source": "/auth/:path*", "destination": "/api" },
+    { "source": "/admin/:path*", "destination": "/api" }
+  ]
+}

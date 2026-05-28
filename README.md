@@ -15,19 +15,6 @@ This initial implementation contains:
 - audit events for sensitive identity actions
 - lightweight browser mock page for manual testing
 
-## Boundary
-
-Identity answers **who the user is** and how strong the authentication was.
-Financial authorization, object-level account access, and bank-consent validation should remain separate modules.
-
-```text
-identity       -> user, credentials, MFA, sessions, token lifecycle
-authorization  -> roles, permissions, object-level access
-consent        -> bank-account access grants and scopes
-audit          -> append-only security events
-risk           -> step-up and suspicious activity decisions
-```
-
 ## Local development
 
 ```bash
@@ -36,10 +23,25 @@ cp .env.example .env
 npm run dev
 ```
 
-Open the mock test page:
+Open locally:
 
 ```text
 http://localhost:4000/mock
+```
+
+## Vercel
+
+The app is Vercel-compatible through `api/index.ts` and `vercel.json` rewrites.
+
+Expected routes on Vercel:
+
+```text
+/mock          -> static mock UI
+/mock.html     -> static mock UI
+/health        -> serverless Fastify API
+/auth/*        -> serverless Fastify API
+/me            -> serverless Fastify API
+/admin/*       -> serverless Fastify API
 ```
 
 ## Security note
