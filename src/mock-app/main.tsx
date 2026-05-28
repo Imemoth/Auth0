@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { callApi, pretty } from './api';
+import { ApiCallError, type ApiCallMeta, callApi, pretty } from './api';
 import './styles.css';
 
 type FormState = {
@@ -14,6 +14,12 @@ type FormState = {
   setupTotpCode: string;
   accessToken: string;
   refreshToken: string;
+};
+
+type Feedback = {
+  kind: 'idle' | 'running' | 'success' | 'error';
+  title: string;
+  detail: string;
 };
 
 const initialForm: FormState = {
@@ -34,21 +40,50 @@ function App() {
   const [output, setOutput] = useState('Ready.');
   const [loading, setLoading] = useState<string | null>(null);
   const [totp, setTotp] = useState<{ secret?: string; otpauthUrl?: string; note?: string } | null>(null);
+  const [logs, setLogs] = useState<ApiCallMeta[]>([]);
+  const [feedback, setFeedback] = useState<Feedback>({
+    kind: 'idle',
+    title: 'Ready',
+    detail: 'A mock console készen áll. Indíts egy Health checket vagy Register flow-t.'
+  });
 
   const isAuthenticated = useMemo(() => Boolean(form.accessToken), [form.accessToken]);
+  const latestLog = logs[0];
 
   function patch(update: Partial<FormState>) {
     setForm((current) => ({ ...current, ...update }));
   }
 
-  async function run(label: string, action: () => Promise<unknown>) {
+  function pushLog(meta: ApiCallMeta) {
+    setLogs((current) => [meta, ...current].slice(0, 80));
+  }
+
+  async function run(label: string, action: () => Promise<{ data: unknown; meta: ApiCallMeta }>) {
     setLoading(label);
+    setFeedback({ kind: 'running', title: `Running: ${label}`, detail: 'API hívás folyamatban...' });
     try {
-      const result = await action();
-      setOutput(pretty(result));
-      return result as any;
+      const { data, meta } = await action();
+      pushLog(meta);
+      setOutput(pretty(data));
+      setFeedback({
+        kind: 'success',
+        title: `${meta.method} ${meta.path} -> ${meta.status}`,
+        detail: `Sikeres hívás ${meta.durationMs} ms alatt.`
+      });
+      return data as any;
     } catch (error) {
-      setOutput(pretty(error));
+      if (error instanceof ApiCallError) {
+        pushLog(error.meta);
+        setOutput(pretty(error.meta.errorBody));
+        setFeedback({
+          kind: 'error',
+          title: `${error.meta.method} ${error.meta.path} -> ${error.meta.status || 'ERR'}`,
+          detail: `Sikertelen hívás ${error.meta.durationMs} ms alatt.`
+        });
+      } else {
+        setOutput(pretty(error));
+        setFeedback({ kind: 'error', title: 'Unexpected UI error', detail: error instanceof Error ? error.message : 'Unknown error' });
+      }
       return null;
     } finally {
       setLoading(null);
@@ -72,9 +107,7 @@ function App() {
       method: 'POST',
       body: JSON.stringify({ email: form.registerEmail, password: form.registerPassword })
     }));
-    if (result?.devEmailVerificationToken) {
-      patch({ verifyToken: result.devEmailVerificationToken });
-    }
+    if (result?.devEmailVerificationToken) patch({ verifyToken: result.devEmailVerificationToken });
   }
 
   async function verifyEmail() {
@@ -147,18 +180,29 @@ function App() {
     }, form.accessToken));
   }
 
+  async function copyText(value: string, label: string) {
+    await navigator.clipboard.writeText(value);
+    setFeedback({ kind: 'success', title: `${label} copied`, detail: 'Vágólapra másolva.' });
+  }
+
   return (
     <div className="shell">
       <header className="hero">
         <div>
           <p className="eyebrow">Identity Management Mock</p>
           <h1>Auth0-style Identity Console</h1>
-          <p className="subtitle">React + Vite tesztfelület a Vercel-native identity API-hoz.</p>
+          <p className="subtitle">React + Vite tesztfelület visszajelzésekkel és kliensoldali API loggal.</p>
         </div>
-        <div className={isAuthenticated ? 'status ok' : 'status'}>
-          {isAuthenticated ? 'Authenticated' : 'Anonymous'}
-        </div>
+        <div className={isAuthenticated ? 'status ok' : 'status'}>{isAuthenticated ? 'Authenticated' : 'Anonymous'}</div>
       </header>
+
+      <section className={`feedback ${feedback.kind}`}>
+        <div>
+          <strong>{feedback.title}</strong>
+          <span>{feedback.detail}</span>
+        </div>
+        {latestLog && <code>{latestLog.method} {latestLog.path} | {latestLog.status || 'ERR'} | {latestLog.durationMs}ms</code>}
+      </section>
 
       <main className="grid">
         <Card title="1. Register">
@@ -186,15 +230,7 @@ function App() {
 
         <Card title="5. TOTP setup">
           <Button busy={loading === 'start-totp-setup'} onClick={startTotpSetup}>Start TOTP setup</Button>
-          {totp && (
-            <div className="totpBox">
-              <strong>Secret</strong>
-              <code>{totp.secret}</code>
-              <strong>otpauth URL</strong>
-              <textarea readOnly value={totp.otpauthUrl ?? ''} rows={4} />
-              <small>{totp.note}</small>
-            </div>
-          )}
+          {totp && <div className="totpBox"><strong>Secret</strong><code>{totp.secret}</code><button onClick={() => copyText(totp.secret ?? '', 'TOTP secret')}>Copy secret</button><strong>otpauth URL</strong><textarea readOnly value={totp.otpauthUrl ?? ''} rows={4} /><small>{totp.note}</small></div>}
           <Input label="Setup TOTP code" value={form.setupTotpCode} onChange={(value) => patch({ setupTotpCode: value })} />
           <Button busy={loading === 'verify-totp-setup'} onClick={verifyTotpSetup}>Verify setup</Button>
         </Card>
@@ -209,19 +245,30 @@ function App() {
             <Button variant="danger" busy={loading === 'logout'} onClick={logout}>Logout</Button>
           </div>
           <Textarea label="Access token" value={form.accessToken} onChange={(value) => patch({ accessToken: value })} rows={4} />
+          <Button onClick={() => copyText(form.accessToken, 'Access token')}>Copy access token</Button>
           <Textarea label="Refresh token" value={form.refreshToken} onChange={(value) => patch({ refreshToken: value })} rows={3} />
+          <Button onClick={() => copyText(form.refreshToken, 'Refresh token')}>Copy refresh token</Button>
         </Card>
 
         <section className="responsePanel">
-          <div className="responseHeader">
-            <h2>Response</h2>
-            {loading && <span>Running: {loading}</span>}
-          </div>
+          <div className="responseHeader"><h2>Response</h2><div className="responseActions"><button onClick={() => copyText(output, 'Response')}>Copy response</button>{loading && <span>Running: {loading}</span>}</div></div>
           <pre>{output}</pre>
+        </section>
+
+        <section className="logPanel">
+          <div className="responseHeader"><h2>Client request log</h2><div className="responseActions"><button onClick={() => setLogs([])}>Clear logs</button><span>{logs.length} entries</span></div></div>
+          <div className="logList">
+            {logs.length === 0 && <p className="empty">Nincs még API hívás.</p>}
+            {logs.map((log) => <LogItem key={log.id} log={log} />)}
+          </div>
         </section>
       </main>
     </div>
   );
+}
+
+function LogItem({ log }: { log: ApiCallMeta }) {
+  return <details className={log.ok ? 'logItem ok' : 'logItem error'}><summary><span className="badge">{log.ok ? 'OK' : 'ERR'}</span><strong>{log.method} {log.path}</strong><em>{log.status || 'network'} / {log.durationMs}ms</em><time>{new Date(log.startedAt).toLocaleTimeString()}</time></summary><pre>{pretty({ request: log.requestBody, response: log.responseBody, error: log.errorBody })}</pre></details>;
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
