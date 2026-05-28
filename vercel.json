@@ -1,11 +1,7 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/", "destination": "/mock.html" },
-    { "source": "/mock", "destination": "/mock.html" },
-    { "source": "/health", "destination": "/api/index" },
-    { "source": "/me", "destination": "/api/index" },
-    { "source": "/auth/:path*", "destination": "/api/index" },
-    { "source": "/admin/:path*", "destination": "/api/index" }
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/mock", "destination": "/mock.html" }
   ]
 }
