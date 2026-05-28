@@ -2,19 +2,6 @@
 
 Self-hosted identity-management foundation for a financial application.
 
-## Current scope
-
-This initial implementation contains:
-
-- user registration with email-verification state
-- password credential handling with Argon2id
-- login with short-lived JWT access tokens
-- refresh-token rotation with reuse detection
-- server-side session registry
-- TOTP MFA setup and MFA challenge completion
-- audit events for sensitive identity actions
-- lightweight browser mock page for manual testing
-
 ## Local development
 
 ```bash
@@ -29,19 +16,17 @@ Open locally:
 http://localhost:4000/mock
 ```
 
-## Vercel
+## Vercel status
 
-The app is Vercel-compatible through `api/index.ts` and `vercel.json` rewrites.
+The root and `/mock` routes are static mock UI routes. `/health` is a minimal Vercel-native serverless function used to validate runtime stability before enabling the full auth API on Vercel.
 
-Expected routes on Vercel:
+Expected routes after this hotfix:
 
 ```text
-/mock          -> static mock UI
-/mock.html     -> static mock UI
-/health        -> serverless Fastify API
-/auth/*        -> serverless Fastify API
-/me            -> serverless Fastify API
-/admin/*       -> serverless Fastify API
+/         -> static mock UI
+/mock     -> static mock UI
+/mock.html -> static mock UI
+/health   -> minimal Vercel function
 ```
 
 ## Security note
