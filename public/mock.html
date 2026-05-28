@@ -1,4 +1,182 @@
 <!doctype html>
 <html lang="hu">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Identity Mock Tester</title><style>body{font-family:system-ui;background:#0b1020;color:#e8eefc;margin:0}header{padding:28px 32px;background:#111832}main{padding:20px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}section{border:1px solid #25304e;border-radius:16px;padding:18px;background:#111832}input,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;background:#0b1020;color:white;border:1px solid #33405f}button{margin-top:12px;padding:10px 14px;border:0;border-radius:10px;background:#7c9cff;font-weight:700}pre{white-space:pre-wrap;background:#070b16;padding:12px;border-radius:12px}.wide{grid-column:1/-1}</style></head>
-<body><header><h1>Auth0-style Identity Mock Tester</h1><p>Mock oldal az identity API kézi teszteléséhez.</p></header><main><section><h2>Status</h2><button onclick="health()">GET /health</button></section><section class="wide"><h2>Response</h2><pre id="out">Ready.</pre></section></main><script>async function health(){const r=await fetch('/health');out.textContent=JSON.stringify(await r.json(),null,2)}</script></body></html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Identity Mock Tester</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    body { margin: 0; background: #0b1020; color: #e8eefc; }
+    header { padding: 28px 32px; background: linear-gradient(135deg, #18213f, #0d1328); border-bottom: 1px solid #24304f; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { color: #aab6d8; }
+    main { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; padding: 20px; }
+    section { background: #111832; border: 1px solid #25304e; border-radius: 16px; padding: 18px; box-shadow: 0 10px 32px rgb(0 0 0 / 20%); }
+    h2 { margin-top: 0; font-size: 18px; }
+    label { display: block; margin: 12px 0 6px; color: #cbd5f0; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #33405f; background: #0b1020; color: #f5f7ff; }
+    button { margin-top: 12px; padding: 10px 14px; border: 0; border-radius: 10px; background: #7c9cff; color: #071025; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #263454; color: #dbe5ff; }
+    button.danger { background: #ff7c9c; color: #220711; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #070b16; border: 1px solid #25304e; padding: 12px; border-radius: 12px; max-height: 280px; overflow: auto; }
+    .wide { grid-column: 1 / -1; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    img { max-width: 220px; background: white; padding: 8px; border-radius: 12px; }
+    small { color: #8998c4; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Auth0-style Identity Mock Tester</h1>
+    <p>Manualis tesztoldal: register, verify email, login, JWT, refresh token, TOTP MFA, session lista.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>1. Register</h2>
+      <label>Email</label><input id="regEmail" value="demo@example.com" />
+      <label>Password</label><input id="regPassword" type="password" value="VeryStrongPassword123!" />
+      <button onclick="registerUser()">Register</button>
+      <small>A demo visszaadja a verification tokent, hogy ne kelljen email provider.</small>
+    </section>
+
+    <section>
+      <h2>2. Verify email</h2>
+      <label>Verification token</label><input id="verifyToken" />
+      <button onclick="verifyEmail()">Verify</button>
+    </section>
+
+    <section>
+      <h2>3. Login</h2>
+      <label>Email</label><input id="loginEmail" value="demo@example.com" />
+      <label>Password</label><input id="loginPassword" type="password" value="VeryStrongPassword123!" />
+      <button onclick="login()">Login</button>
+      <small>Ha MFA aktiv, challenge token jon vissza teljes session helyett.</small>
+    </section>
+
+    <section>
+      <h2>4. MFA challenge</h2>
+      <label>Challenge token</label><input id="challengeToken" />
+      <label>TOTP code</label><input id="mfaCode" />
+      <button onclick="completeMfa()">Complete MFA</button>
+    </section>
+
+    <section>
+      <h2>5. TOTP setup</h2>
+      <button onclick="startTotpSetup()">Start TOTP setup</button>
+      <div id="qrBox"></div>
+      <label>Setup TOTP code</label><input id="setupTotpCode" />
+      <button onclick="verifyTotpSetup()">Verify setup</button>
+    </section>
+
+    <section>
+      <h2>6. Session / token</h2>
+      <div class="row">
+        <button onclick="me()">GET /me</button>
+        <button onclick="sessions()" class="secondary">Sessions</button>
+        <button onclick="refresh()" class="secondary">Refresh</button>
+        <button onclick="logout()" class="danger">Logout</button>
+        <button onclick="audit()" class="secondary">Audit</button>
+      </div>
+      <label>Access token</label><textarea id="accessToken" rows="5"></textarea>
+      <label>Refresh token</label><textarea id="refreshToken" rows="4"></textarea>
+    </section>
+
+    <section class="wide">
+      <h2>Response</h2>
+      <pre id="out">Ready.</pre>
+    </section>
+  </main>
+
+  <script>
+    const out = document.getElementById('out');
+    const setOut = (data) => { out.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); };
+
+    async function api(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      const accessToken = document.getElementById('accessToken').value.trim();
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+      const response = await fetch(path, { ...options, headers });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw data;
+      return data;
+    }
+
+    function applyTokens(data) {
+      if (data.accessToken) document.getElementById('accessToken').value = data.accessToken;
+      if (data.refreshToken) document.getElementById('refreshToken').value = data.refreshToken;
+    }
+
+    async function registerUser() {
+      try {
+        const data = await api('/auth/register', { method: 'POST', body: JSON.stringify({ email: regEmail.value, password: regPassword.value }) });
+        if (data.devEmailVerificationToken) verifyToken.value = data.devEmailVerificationToken;
+        setOut(data);
+      } catch (e) { setOut(e); }
+    }
+
+    async function verifyEmail() {
+      try { setOut(await api('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token: verifyToken.value }) })); }
+      catch (e) { setOut(e); }
+    }
+
+    async function login() {
+      try {
+        const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: loginEmail.value, password: loginPassword.value, deviceFingerprint: 'mock-browser' }) });
+        if (data.challengeToken) challengeToken.value = data.challengeToken;
+        applyTokens(data);
+        setOut(data);
+      } catch (e) { setOut(e); }
+    }
+
+    async function completeMfa() {
+      try {
+        const data = await api('/auth/mfa/complete', { method: 'POST', body: JSON.stringify({ challengeToken: challengeToken.value, code: mfaCode.value }) });
+        applyTokens(data);
+        setOut(data);
+      } catch (e) { setOut(e); }
+    }
+
+    async function startTotpSetup() {
+      try {
+        const data = await api('/auth/mfa/totp/setup', { method: 'POST', body: '{}' });
+        qrBox.innerHTML = `<p><img src="${data.qrCodeDataUrl}" alt="TOTP QR" /></p><pre>${data.otpauthUrl}</pre>`;
+        setOut(data);
+      } catch (e) { setOut(e); }
+    }
+
+    async function verifyTotpSetup() {
+      try { setOut(await api('/auth/mfa/totp/verify-setup', { method: 'POST', body: JSON.stringify({ code: setupTotpCode.value }) })); }
+      catch (e) { setOut(e); }
+    }
+
+    async function me() {
+      try { setOut(await api('/me')); }
+      catch (e) { setOut(e); }
+    }
+
+    async function sessions() {
+      try { setOut(await api('/auth/sessions')); }
+      catch (e) { setOut(e); }
+    }
+
+    async function refresh() {
+      try {
+        const data = await api('/auth/token/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: refreshToken.value }) });
+        applyTokens(data);
+        setOut(data);
+      } catch (e) { setOut(e); }
+    }
+
+    async function logout() {
+      try { setOut(await api('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: refreshToken.value }) })); }
+      catch (e) { setOut(e); }
+    }
+
+    async function audit() {
+      try { setOut(await api('/admin/audit-events')); }
+      catch (e) { setOut(e); }
+    }
+  </script>
+</body>
+</html>
